@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from typing import Any
+import uuid
 
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .cloud import EufyLifeAuthError, async_login
 from .const import (
-    API_BASE_URL,
-    CLIENT_ID,
-    CLIENT_SECRET,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -31,10 +33,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_EMAIL): str,
         vol.Required(CONF_PASSWORD): str,
-        vol.Optional(
-            CONF_UPDATE_INTERVAL, 
-            default="5_minutes"
-        ): vol.In(UPDATE_INTERVAL_OPTIONS.keys()),
+        vol.Optional(CONF_UPDATE_INTERVAL, default="5 minutes"): vol.In(
+            UPDATE_INTERVAL_OPTIONS.keys()
+        ),
     }
 )
 
@@ -83,6 +84,9 @@ class EufyLifeAPIConfigFlow(ConfigFlow, domain=DOMAIN):
                             CONF_UPDATE_INTERVAL: update_interval,
                             "user_id": auth_data["user_id"],
                             "access_token": auth_data["access_token"],
+                            "user_center_id": auth_data.get("user_center_id"),
+                            "user_center_token": auth_data.get("user_center_token"),
+                            "openudid": str(uuid.uuid4()),
                             "expires_at": auth_data["expires_at"],
                             "device_id": auth_data.get("device_id"),
                             "customer_ids": auth_data.get("customer_ids", []),
@@ -90,7 +94,9 @@ class EufyLifeAPIConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     errors["base"] = "invalid_auth"
-            except aiohttp.ClientError:
+            except EufyLifeAuthError:
+                errors["base"] = "invalid_auth"
+            except (aiohttp.ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
@@ -118,7 +124,9 @@ class EufyLifeAPIConfigFlow(ConfigFlow, domain=DOMAIN):
                 step_id="reauth_confirm",
                 data_schema=vol.Schema(
                     {
-                        vol.Required(CONF_EMAIL, default=self._reauth_entry.data[CONF_EMAIL]): str,
+                        vol.Required(
+                            CONF_EMAIL, default=self._reauth_entry.data[CONF_EMAIL]
+                        ): str,
                         vol.Required(CONF_PASSWORD): str,
                     }
                 ),
@@ -137,7 +145,10 @@ class EufyLifeAPIConfigFlow(ConfigFlow, domain=DOMAIN):
                         **self._reauth_entry.data,
                         CONF_EMAIL: email,
                         CONF_PASSWORD: password,
+                        "user_id": auth_data["user_id"],
                         "access_token": auth_data["access_token"],
+                        "user_center_id": auth_data.get("user_center_id"),
+                        "user_center_token": auth_data.get("user_center_token"),
                         "expires_at": auth_data["expires_at"],
                     },
                 )
@@ -154,6 +165,28 @@ class EufyLifeAPIConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                     errors={"base": "invalid_auth"},
                 )
+        except EufyLifeAuthError:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_EMAIL, default=email): str,
+                        vol.Required(CONF_PASSWORD): str,
+                    }
+                ),
+                errors={"base": "invalid_auth"},
+            )
+        except (aiohttp.ClientError, TimeoutError):
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_EMAIL, default=email): str,
+                        vol.Required(CONF_PASSWORD): str,
+                    }
+                ),
+                errors={"base": "cannot_connect"},
+            )
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception during reauth")
             return self.async_show_form(
@@ -167,69 +200,17 @@ class EufyLifeAPIConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors={"base": "unknown"},
             )
 
-    async def _test_connection(self, email: str, password: str) -> dict[str, Any] | None:
+    async def _test_connection(
+        self, email: str, password: str
+    ) -> dict[str, Any] | None:
         """Test if we can authenticate with the given credentials."""
         session = async_get_clientsession(self.hass)
-
-        headers = {
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "User-Agent": "EufyLife-iOS-3.3.7",
-            "Category": "Health",
-            "Language": "en",
-            "Timezone": "UTC",
-            "Country": "US",
-            "Content-Type": "application/json",
-        }
-
-        login_data = {
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "email": email,
-            "password": password,
-        }
-
-        try:
-            async with session.post(
-                f"{API_BASE_URL}/v1/user/v2/email/login",
-                headers=headers,
-                json=login_data,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if data.get("res_code") == 1:
-                        access_token = data.get("access_token")
-                        user_id = data.get("user_id")
-                        expires_in = data.get("expires_in", 2592000)  # 30 days default
-                        
-                        if access_token and user_id:
-                            # Extract device and customer info
-                            devices = data.get("devices", [])
-                            device_id = devices[0].get("id") if devices else None
-                            
-                            customers = data.get("customers", [])
-                            customer_ids = [c.get("id") for c in customers if c.get("id")]
-                            
-                            return {
-                                "access_token": access_token,
-                                "user_id": user_id,
-                                "expires_at": time.time() + expires_in,
-                                "device_id": device_id,
-                                "customer_ids": customer_ids,
-                            }
-                
-                _LOGGER.error("Login failed: %s", data.get("message", "Unknown error"))
-                return None
-                
-        except asyncio.TimeoutError:
-            _LOGGER.error("Timeout connecting to EufyLife API")
-            return None
-        except Exception as err:
-            _LOGGER.error("Error connecting to EufyLife API: %s", err)
-            return None
+        return await async_login(
+            session,
+            email,
+            password,
+            self.hass.config.country or "US",
+        )
 
 
 class EufyLifeAPIOptionsFlow(OptionsFlow):
@@ -245,30 +226,35 @@ class EufyLifeAPIOptionsFlow(OptionsFlow):
         """Manage the options."""
         if user_input is not None:
             update_interval = UPDATE_INTERVAL_OPTIONS[user_input[CONF_UPDATE_INTERVAL]]
-            
+
             # Update the config entry data
             new_data = {**self.config_entry.data, CONF_UPDATE_INTERVAL: update_interval}
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
-            
+
             return self.async_create_entry(title="", data={})
 
         # Get current interval
-        current_interval = self.config_entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        current_interval = self.config_entry.data.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
         current_key = next(
-            (key for key, value in UPDATE_INTERVAL_OPTIONS.items() if value == current_interval),
-            "5 minutes"
+            (
+                key
+                for key, value in UPDATE_INTERVAL_OPTIONS.items()
+                if value == current_interval
+            ),
+            "5 minutes",
         )
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_UPDATE_INTERVAL, 
-                        default=current_key
-                    ): vol.In(UPDATE_INTERVAL_OPTIONS.keys()),
+                    vol.Required(CONF_UPDATE_INTERVAL, default=current_key): vol.In(
+                        UPDATE_INTERVAL_OPTIONS.keys()
+                    ),
                 }
             ),
-        ) 
+        )

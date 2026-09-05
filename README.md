@@ -4,6 +4,10 @@
 
 <h1 align="center">EufyLife API Integration for Home Assistant</h1>
 
+This fork adds Eufy E10 outdoor light support to
+[m4ary/eufylife-api-hacs](https://github.com/m4ary/eufylife-api-hacs).
+Upstream history and the original MIT license are preserved.
+
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
@@ -16,6 +20,7 @@
 | Platform | Description |
 | -------- | ----------- |
 | `sensor` | Show current weight, target weight, body fat, muscle mass, and BMI for each family member |
+| `light` | Discover and control Eufy Outdoor Pathway Lights E10 (T8L30) through the Eufy Life cloud |
 
 ## Features
 
@@ -25,6 +30,7 @@
 - 👥 **Multi-User**: Supports multiple family members on the same scale
 - 🔄 **Real-time Updates**: Automatic data synchronization with configurable intervals (1 min to 12 hours)
 - ⚙️ **Configurable**: Adjust update frequency after setup without restarting Home Assistante
+- 💡 **Outdoor Lights**: On/off, brightness, native RGB picker and classic presets for Eufy E10/T8L30 pathway lights
 
 ## Installation
 
@@ -32,8 +38,8 @@
 
 1. Have [HACS](https://hacs.xyz/) installed
 2. In the HACS panel, go to "Integrations"
-3. Click the "+ EXPLORE & DOWNLOAD REPOSITORIES" button
-4. Search for "EufyLife API"
+3. Add `https://github.com/ThYpHo0n/eufylife-lights-hacs` as a custom Integration repository
+4. Select this fork, not the upstream scale-only integration
 5. Download this integration
 6. Restart Home Assistant
 7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "EufyLife API"
@@ -59,7 +65,10 @@ Configuration is done through the Home Assistant UI:
    - **Password**: Your EufyLife account password
 4. Choose your preferred update interval (default: 5 minutes)
 5. The integration will automatically discover your devices and family members
-6. Sensors will be created for each family member
+6. Scale sensors and E10 light entities will be created for supported devices
+
+Use the same direct email/password login that works in the Eufy Life app. Accounts
+created with Google or Apple sign-in may need a Eufy password set or reset first.
 
 ### Update Intervals
 
@@ -81,6 +90,31 @@ To change the update interval after setup:
 ## Supported Devices
 
 - EufyLife smart scales connected to the EufyLife mobile app
+- Eufy Outdoor Pathway Lights E10 (`T8L30`), cloud control including shared accounts
+
+### E10 light controls (experimental fork)
+
+Open the light's more-info panel for brightness, the RGB picker and the effect
+selector. Classic presets are discovered from the account's Eufy catalog; the
+tested E10 exposes White, Warm White, Cool White, Welcome1, Alarm1 and Alexa1.
+Existing `light.turn_on`/`light.turn_off` automations keep working.
+
+```yaml
+action: light.turn_on
+target:
+  entity_id: light.eufy_outdoor_pathway_lights_e10
+data:
+  brightness_pct: 50
+  rgb_color: [255, 128, 0]
+```
+
+Replace `rgb_color` with `effect: Warm White` to select a preset. Select a color
+or a preset, not both. Brightness is retained unless supplied in the action.
+Colors use native RGB channels, with the warm/cool-white channels disabled;
+these are not app-calibrated RGBWC colors. Power/brightness come from device
+reports; color/effect are remembered only after a successful device ACK and
+are marked assumed in HA. The palette cannot yet be read back, including
+after restarting HA or changing colors in the app without changing modes.
 
 ## Sensors
 
@@ -107,11 +141,15 @@ This integration uses the official EufyLife API endpoints:
 - **Authentication**: `POST /v1/user/v2/email/login`
 - **Weight Data**: `GET /v1/customer/all_target`
 - **Detailed Data**: `GET /v1/customer/target/{customer_id}`
+- **E10 discovery**: encrypted Eufy Life AIoT device-list API
+- **E10 state/control**: certificate-authenticated Eufy Life MQTT
 
 
 ## Limitations
 
 - Requires active internet connection for cloud API access
+- E10 newer-format animated/AI presets, per-lamp editing and app-identical white
+  calibration are not implemented; unsupported catalog entries are hidden
 - data are avaialbe after open the app in your phone
 - Token expires after 30 days (automatic re-authentication planned for future versions)
 - Historical data is limited to what's available via the current API endpoints
@@ -135,8 +173,8 @@ This is an unofficial integration. EufyLife and Eufy are trademarks of Anker Inn
 [exampleimg]: .github/logo.png
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
-[license-shield]: https://img.shields.io/github/license/m4ary/eufylife-api-hacs.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/badge/maintainer-%40mshary-blue.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/m4ary/eufylife-api-hacs.svg?style=for-the-badge
-[releases]: https://github.com/m4ary/eufylife-api-hacs/releases
-[user_profile]: https://github.com/m4ary 
+[license-shield]: https://img.shields.io/github/license/ThYpHo0n/eufylife-lights-hacs.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/badge/maintainer-%40ThYpHo0n-blue.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/ThYpHo0n/eufylife-lights-hacs.svg?style=for-the-badge
+[releases]: https://github.com/ThYpHo0n/eufylife-lights-hacs/releases
+[user_profile]: https://github.com/ThYpHo0n
