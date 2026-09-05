@@ -4,10 +4,6 @@
 
 <h1 align="center">EufyLife API Integration for Home Assistant</h1>
 
-This fork adds Eufy E10 outdoor light support to
-[m4ary/eufylife-api-hacs](https://github.com/m4ary/eufylife-api-hacs).
-Upstream history and the original MIT license are preserved.
-
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
@@ -38,8 +34,8 @@ Upstream history and the original MIT license are preserved.
 
 1. Have [HACS](https://hacs.xyz/) installed
 2. In the HACS panel, go to "Integrations"
-3. Add `https://github.com/ThYpHo0n/eufylife-lights-hacs` as a custom Integration repository
-4. Select this fork, not the upstream scale-only integration
+3. Click the "+ EXPLORE & DOWNLOAD REPOSITORIES" button
+4. Search for "EufyLife API"
 5. Download this integration
 6. Restart Home Assistant
 7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "EufyLife API"
@@ -92,7 +88,7 @@ To change the update interval after setup:
 - EufyLife smart scales connected to the EufyLife mobile app
 - Eufy Outdoor Pathway Lights E10 (`T8L30`), cloud control including shared accounts
 
-### E10 light controls (experimental fork)
+### E10 light controls (experimental)
 
 Open the light's more-info panel for brightness, the RGB picker and the effect
 selector. Classic presets are discovered from the account's Eufy catalog; the
@@ -173,8 +169,8 @@ This is an unofficial integration. EufyLife and Eufy are trademarks of Anker Inn
 [exampleimg]: .github/logo.png
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
-[license-shield]: https://img.shields.io/github/license/ThYpHo0n/eufylife-lights-hacs.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/badge/maintainer-%40ThYpHo0n-blue.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/ThYpHo0n/eufylife-lights-hacs.svg?style=for-the-badge
-[releases]: https://github.com/ThYpHo0n/eufylife-lights-hacs/releases
-[user_profile]: https://github.com/ThYpHo0n
+[license-shield]: https://img.shields.io/github/license/m4ary/eufylife-api-hacs.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/badge/maintainer-%40mshary-blue.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/m4ary/eufylife-api-hacs.svg?style=for-the-badge
+[releases]: https://github.com/m4ary/eufylife-api-hacs/releases
+[user_profile]: https://github.com/m4ary
